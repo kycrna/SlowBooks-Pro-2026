@@ -26,12 +26,29 @@ def _proc(args, returncode=0, stdout="", stderr=""):
 
 def test_status_reports_codex_unavailable(monkeypatch):
     monkeypatch.setattr(codex_adapter.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(codex_adapter, "CODEX_EXECUTABLE_CANDIDATES", ())
 
     status = get_status()
 
     assert status.installed is False
     assert status.authenticated is False
     assert status.message == "Codex CLI is not installed"
+
+
+def test_status_finds_codex_from_standard_gui_app_path(monkeypatch, tmp_path):
+    codex_path = tmp_path / "codex"
+    codex_path.write_text("#!/bin/sh\n", encoding="utf-8")
+    codex_path.chmod(0o755)
+    monkeypatch.setattr(codex_adapter.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(codex_adapter, "CODEX_EXECUTABLE_CANDIDATES", (codex_path,))
+
+    def runner(args, **kwargs):
+        return _proc(args, stdout="Logged in using ChatGPT\n")
+
+    status = get_status(runner=runner)
+
+    assert status.installed is True
+    assert status.authenticated is True
 
 
 def test_status_reports_chatgpt_authenticated(monkeypatch):
@@ -114,6 +131,7 @@ def test_run_prompt_invokes_codex_exec_and_returns_final_message(monkeypatch):
 
 def test_run_prompt_missing_executable(monkeypatch):
     monkeypatch.setattr(codex_adapter.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(codex_adapter, "CODEX_EXECUTABLE_CANDIDATES", ())
 
     with pytest.raises(CodexUnavailableError):
         run_prompt("system", "user")

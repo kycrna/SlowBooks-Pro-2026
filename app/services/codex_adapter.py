@@ -24,6 +24,11 @@ CODEX_TIMEOUT_ENV = "SLOWBOOKS_CODEX_TIMEOUT_SECONDS"
 CODEX_DEFAULT_TIMEOUT = 180.0
 CODEX_STATUS_TIMEOUT = 15.0
 CODEX_MODEL_RE = re.compile(r"^[A-Za-z0-9._:/@+-]{1,128}$")
+CODEX_EXECUTABLE_CANDIDATES = (
+    Path.home() / ".local" / "bin" / "codex",
+    Path("/opt/homebrew/bin/codex"),
+    Path("/usr/local/bin/codex"),
+)
 
 
 class CodexAdapterError(Exception):
@@ -79,9 +84,12 @@ Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 def _codex_executable() -> str:
     exe = shutil.which("codex")
-    if not exe:
-        raise CodexUnavailableError()
-    return exe
+    if exe:
+        return exe
+    for candidate in CODEX_EXECUTABLE_CANDIDATES:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    raise CodexUnavailableError()
 
 
 def _timeout() -> float:
