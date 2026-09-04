@@ -2,7 +2,7 @@
 # Slowbooks Pro 2026 — AI Insights service (Phase 9.5)
 #
 # Runs the analytics dashboard through an LLM and returns a structured
-# "3 observations / 3 risks / 3 recommendations" report. Six providers
+# "3 observations / 3 risks / 3 recommendations" report. Providers
 # are hardcoded with sensible April-2026 defaults; users can override the
 # model string per provider from the UI so they're not stuck when the
 # vendors inevitably rename everything next quarter.
@@ -15,6 +15,7 @@
 #                   (10k neurons/day free)
 #   * anthropic   — Claude native /v1/messages
 #   * openai      — OpenAI /v1/chat/completions
+#   * openai_codex — local Codex CLI authenticated with ChatGPT
 #   * gemini      — Google generativelanguage.googleapis.com generateContent
 #                   (Flash models free)
 #
@@ -34,6 +35,14 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 import httpx
+
+from app.services.codex_adapter import (
+    CODEX_DEFAULT_MODEL,
+    CODEX_PROVIDER_KEY,
+    CODEX_PROVIDER_LABEL,
+    CodexAdapterError,
+    run_prompt as run_codex_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +220,7 @@ class ProviderSpec:
     key: str  # machine id used in settings + UI
     label: str  # human-readable name for the UI
     default_model: str  # recommended default as of April 2026
-    wire_format: str  # "openai" | "anthropic" | "gemini"
+    wire_format: str  # "openai" | "anthropic" | "gemini" | "codex"
     docs_url: str  # where users go to get a key
     free_tier_hint: str  # 1-line description for the UI
     # Curated known-good model IDs, shown as a dropdown in the UI. The user
@@ -220,6 +229,7 @@ class ProviderSpec:
     model_choices: tuple = ()
     needs_account_id: bool = False  # Cloudflare direct REST
     needs_worker_url: bool = False  # Self-hosted CF Worker gateway
+    needs_api_key: bool = True
 
 
 PROVIDERS: Dict[str, ProviderSpec] = {
@@ -310,6 +320,19 @@ PROVIDERS: Dict[str, ProviderSpec] = {
         # https://platform.openai.com/docs/models. Use Custom… for new ones.
         model_choices=("gpt-5.4-mini",),
     ),
+    CODEX_PROVIDER_KEY: ProviderSpec(
+        key=CODEX_PROVIDER_KEY,
+        label=CODEX_PROVIDER_LABEL,
+        default_model=CODEX_DEFAULT_MODEL,
+        wire_format="codex",
+        docs_url="https://developers.openai.com/codex/cli",
+        free_tier_hint=(
+            "Uses the local Codex CLI signed in with ChatGPT on this Mac. "
+            "SlowBooks does not store Codex OAuth credentials."
+        ),
+        model_choices=(CODEX_DEFAULT_MODEL,),
+        needs_api_key=False,
+    ),
     "gemini": ProviderSpec(
         key="gemini",
         label="Google Gemini",
@@ -339,6 +362,7 @@ def provider_list() -> list:
             "free_tier_hint": p.free_tier_hint,
             "needs_account_id": p.needs_account_id,
             "needs_worker_url": p.needs_worker_url,
+            "needs_api_key": p.needs_api_key,
         }
         for p in PROVIDERS.values()
     ]
@@ -757,6 +781,16 @@ def call_provider(
 
     `client` is injectable for tests that want to stub out the transport.
     """
+    if provider_key == CODEX_PROVIDER_KEY:
+        try:
+            return run_codex_prompt(
+                system=system,
+                user=user,
+                model=model or CODEX_DEFAULT_MODEL,
+            )
+        except CodexAdapterError as exc:
+            raise AIProviderError(str(exc)) from exc
+
     req = build_request(
         provider_key, api_key, model, system, user, account_id, worker_url
     )

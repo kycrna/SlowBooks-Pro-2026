@@ -124,7 +124,7 @@ Flat CSV with columns `(section, key, subkey, value)` covering 9 sections: perio
 ### AI Insights
 An optional LLM layer sits on top of the analytics snapshot and produces a compact **3 observations / 3 risks / 3 recommendations** executive brief. Nothing is sent until you click the **AI Insights** button — the feature is zero-cost by default.
 
-**Seven providers supported out of the box** (verified April 2026):
+**Eight providers supported out of the box**:
 
 | Provider | Wire format | Default model | Free tier |
 |---|---|---|---|
@@ -134,6 +134,7 @@ An optional LLM layer sits on top of the analytics snapshot and produces a compa
 | **Cloudflare Worker Gateway** (self-hosted) | OpenAI-compat | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Same 10k neurons/day — **your keys stay in *your* Cloudflare account** |
 | **Anthropic Claude** | `/v1/messages` | `claude-sonnet-4-6` | Paid only |
 | **OpenAI** | `/v1/chat/completions` | `gpt-5.4-mini` | Paid only |
+| **OpenAI Codex / ChatGPT** | local `codex exec` | `gpt-5.5` | Uses your authenticated Codex/ChatGPT workflow |
 | **Google Gemini** | `generateContent` | `gemini-2.5-flash` | Free Flash tier via AI Studio |
 
 Each provider's model string is configurable from **Settings → AI Insights** — a curated dropdown per provider with a **Custom…** escape hatch for new model IDs the vendors ship between releases. So renames ("gemini-2.5-flash" → "gemini-3.0-nano") are a Custom-field entry, not a code change. Cloudflare gets an extra field for your account ID since its endpoint is account-scoped. The dedicated **Cloudflare Worker Gateway** provider adds a second field for your Worker URL — see the self-hosted gateway section below.
@@ -151,6 +152,19 @@ Each provider's model string is configurable from **Settings → AI Insights** �
 **Never commit `.slowbooks-master.key`** — it is in `.gitignore`. Losing it means losing every encrypted secret.
 
 `GET /api/analytics/ai-config` returns `{provider, model, cloudflare_account_id, worker_url, has_api_key, api_key_encrypted, providers}` — the raw key is **never** in the response body. `PUT /api/analytics/ai-config` accepts a Pydantic `AIConfigUpdate` model — `{provider, model, cloudflare_account_id, worker_url, api_key}` — so malformed payloads are rejected with a 422 before they reach the service layer. An empty/missing `api_key` is interpreted as "keep the existing encrypted value", so re-saving the provider won't clobber the stored key.
+
+**OpenAI Codex / ChatGPT provider.** This custom provider invokes the local
+Codex CLI with `codex exec` and uses the Codex login already present on the
+Mac. Requirements: install the official Codex CLI, then run `codex login` and
+sign in with ChatGPT. No OpenAI API key is needed for this provider, and
+Slowbooks does not read, store, copy, or expose Codex OAuth tokens. The normal
+OpenAI API-key provider remains separate and continues to use OpenAI Platform
+API billing. Codex usage follows the authenticated Codex/ChatGPT workflow; do
+not treat ChatGPT subscription allowance as generic OpenAI API credit.
+
+Version 1 of the Codex provider supports AI Insights and the predefined
+one-shot analyses. Interactive/tool-calling AI Query is not implemented for
+Codex yet; use one of the OpenAI-compatible HTTP providers for that route.
 
 **Endpoints:**
 - `GET  /api/analytics/ai-config` — read display config (no secrets)
@@ -576,7 +590,7 @@ All read endpoints accept `?period=month|quarter|year` (or `mtd/qtd/ytd`), or ex
 | `/api/analytics/ai-config` | GET, PUT | Display config (no raw key) / update provider/model/key/worker_url (key Fernet-encrypted at rest; worker_url validated against SSRF/MITM) |
 | `/api/analytics/ai-config/test` | POST | Smoke-test the configured provider with a one-word prompt |
 | `/api/analytics/ai-insights` | POST | Run the dashboard through the configured LLM; `?force=true` bypasses 10-min cache |
-| `/api/analytics/ai-query` | POST | Tool-calling Q&A — LLM autonomously calls 16 read-only tools to answer `?question=...` |
+| `/api/analytics/ai-query` | POST | Tool-calling Q&A — LLM autonomously calls 16 read-only tools to answer `?question=...` (not supported by the Codex provider in v1) |
 | `/analytics` | GET | Backwards-compat 307 redirect to the SPA hash route `/#/analytics` |
 
 ## Jobs (Customer:Job / Projects)
@@ -599,4 +613,3 @@ All read endpoints accept `?period=month|quarter|year` (or `mtd/qtd/ytd`), or ex
   burden, allocations), time posted to jobs at loaded cost, budgets per code
   seeded from estimates, drill-down job page (budget / committed / actual /
   projected / variance), Job Budget vs Actual report.
-

@@ -773,8 +773,10 @@ const SettingsPage = {
             providers.find(p => p.key === currentProvider) || providers[0] || {};
         const needsAccount = !!currentSpec.needs_account_id;
         const needsWorker = !!currentSpec.needs_worker_url;
+        const needsApiKey = currentSpec.needs_api_key !== false;
         const hasKey = !!cfg.has_api_key;
         const currentModel = cfg.model || '';
+        const codexStatus = cfg.codex_status || {};
 
         const providerOptions = providers.map(p =>
             `<option value="${escapeHtml(p.key)}"${p.key === currentProvider ? ' selected' : ''}>` +
@@ -788,7 +790,7 @@ const SettingsPage = {
             </label>
             <div id="ai-settings-hint" class="ai-settings-hint">
                 ${escapeHtml(currentSpec.free_tier_hint || '')}
-                ${currentSpec.docs_url ? ` &middot; <a href="${escapeHtml(currentSpec.docs_url)}" target="_blank" rel="noopener">Get a key</a>` : ''}
+                ${currentSpec.docs_url ? ` &middot; <a href="${escapeHtml(currentSpec.docs_url)}" target="_blank" rel="noopener">${needsApiKey ? 'Get a key' : 'Codex setup'}</a>` : ''}
             </div>
             <label class="form-field">
                 <span>Model</span>
@@ -830,7 +832,18 @@ const SettingsPage = {
                     and TLS certificates are always verified.
                 </p>
             </fieldset>
-            <label class="form-field">
+            <div id="ai-settings-codex-wrap" class="ai-worker-section"
+                 style="${needsApiKey ? 'display:none' : ''}">
+                <div class="ai-worker-help">
+                    This provider uses the Codex CLI authenticated with your
+                    ChatGPT account on this Mac. SlowBooks does not store your
+                    Codex OAuth credentials.
+                </div>
+                <div id="ai-settings-codex-status" class="ai-worker-security">
+                    ${SettingsPage._codexStatusHtml(codexStatus)}
+                </div>
+            </div>
+            <label class="form-field" id="ai-settings-key-wrap" style="${needsApiKey ? '' : 'display:none'}">
                 <span>API Key / Shared Secret ${hasKey ? '<em class="ai-key-saved">(saved &#10003;)</em>' : ''}</span>
                 <input type="password" id="ai-settings-key"
                        placeholder="${hasKey ? 'Leave blank to keep existing' : 'Paste key or openssl rand -hex 32'}"
@@ -843,6 +856,16 @@ const SettingsPage = {
                 <button type="button" class="btn btn-primary btn-sm" id="ai-settings-save">Save</button>
             </div>
         `;
+    },
+
+    _codexStatusHtml(status) {
+        if (!status || !status.installed) {
+            return 'Codex CLI not found. Install Codex, then run <code>codex login</code>.';
+        }
+        if (!status.authenticated) {
+            return escapeHtml(status.message || 'Codex is installed but not signed in. Run codex login.');
+        }
+        return escapeHtml(status.message || 'Codex is installed and signed in with ChatGPT.');
     },
 
     // True when the saved model isn't in the curated list — the dropdown
@@ -874,6 +897,9 @@ const SettingsPage = {
         const modelCustom = document.getElementById('ai-settings-model-custom');
         const cfWrap = document.getElementById('ai-settings-cf-wrap');
         const workerWrap = document.getElementById('ai-settings-worker-wrap');
+        const keyWrap = document.getElementById('ai-settings-key-wrap');
+        const codexWrap = document.getElementById('ai-settings-codex-wrap');
+        const codexStatus = document.getElementById('ai-settings-codex-status');
         const saveBtn = document.getElementById('ai-settings-save');
         const testBtn = document.getElementById('ai-settings-test');
         const testRes = document.getElementById('ai-settings-test-result');
@@ -889,10 +915,11 @@ const SettingsPage = {
 
         providerSel.addEventListener('change', () => {
             const spec = providers.find(p => p.key === providerSel.value) || {};
+            const needsApiKey = spec.needs_api_key !== false;
             hintEl.innerHTML =
                 escapeHtml(spec.free_tier_hint || '') +
                 (spec.docs_url
-                    ? ` &middot; <a href="${escapeHtml(spec.docs_url)}" target="_blank" rel="noopener">Get a key</a>`
+                    ? ` &middot; <a href="${escapeHtml(spec.docs_url)}" target="_blank" rel="noopener">${needsApiKey ? 'Get a key' : 'Codex setup'}</a>`
                     : '');
             // Repopulate model dropdown for the new provider — the old
             // provider's options aren't valid for this one. Reset custom
@@ -903,6 +930,11 @@ const SettingsPage = {
             syncCustomVisibility();
             cfWrap.style.display = spec.needs_account_id ? '' : 'none';
             workerWrap.style.display = spec.needs_worker_url ? '' : 'none';
+            keyWrap.style.display = needsApiKey ? '' : 'none';
+            codexWrap.style.display = needsApiKey ? 'none' : '';
+            if (codexStatus) {
+                codexStatus.innerHTML = SettingsPage._codexStatusHtml(cfg.codex_status || {});
+            }
         });
 
         const resolveModel = () => {
@@ -913,9 +945,9 @@ const SettingsPage = {
         const collectPayload = () => ({
             provider: providerSel.value,
             model: resolveModel(),
-            cloudflare_account_id: document.getElementById('ai-settings-cf-account').value.trim(),
-            worker_url: document.getElementById('ai-settings-worker-url').value.trim(),
-            api_key: document.getElementById('ai-settings-key').value,
+            cloudflare_account_id: document.getElementById('ai-settings-cf-account')?.value.trim() || '',
+            worker_url: document.getElementById('ai-settings-worker-url')?.value.trim() || '',
+            api_key: document.getElementById('ai-settings-key')?.value || '',
         });
 
         saveBtn.addEventListener('click', async () => {
@@ -1249,4 +1281,3 @@ SettingsPage.toggleEquipment = async function (id, active) {
         SettingsPage.loadEquipment();
     } catch (err) { toast(err.message, 'error'); }
 };
-

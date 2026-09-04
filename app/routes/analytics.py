@@ -35,6 +35,10 @@ from app.services.ai_service import (
     call_with_tools,
     validate_worker_url,
 )
+from app.services.codex_adapter import (
+    CODEX_PROVIDER_KEY,
+    get_status as get_codex_status,
+)
 from app.services.ai_tools import TOOLS as AI_TOOLS, call_tool
 from app.services.ai_actions import (
     ACTIONS as AI_ACTIONS,
@@ -393,6 +397,28 @@ def _require_provider_extras(provider: str, cfg: dict) -> None:
         )
 
 
+def _provider_needs_api_key(provider: str) -> bool:
+    spec = AI_PROVIDERS.get(provider)
+    return bool(spec and spec.needs_api_key)
+
+
+def _require_ai_configured(provider: str, api_key: str, detail: str) -> None:
+    if not provider:
+        raise HTTPException(status_code=400, detail=detail)
+    if _provider_needs_api_key(provider) and not api_key:
+        raise HTTPException(status_code=400, detail="No AI API key configured")
+
+
+def _codex_status_payload() -> dict:
+    status = get_codex_status()
+    return {
+        "installed": status.installed,
+        "authenticated": status.authenticated,
+        "auth_mode": status.auth_mode,
+        "message": status.message,
+    }
+
+
 def _read_ai_config(db: Session) -> dict:
     """Read the current AI config from settings, decrypting the key."""
     settings = get_all_settings(db)
@@ -428,6 +454,7 @@ def get_ai_config(db: Session = Depends(get_db)):
         "has_api_key": bool(raw_key),
         "api_key_encrypted": is_encrypted(raw_key),
         "providers": ai_provider_list(),
+        "codex_status": _codex_status_payload(),
     }
 
 
@@ -505,10 +532,7 @@ def test_ai_config(request: Request, db: Session = Depends(get_db)):
     provider = cfg.get("provider") or ""
     api_key = cfg.get("api_key") or ""
 
-    if not provider:
-        raise HTTPException(status_code=400, detail="No AI provider configured")
-    if not api_key:
-        raise HTTPException(status_code=400, detail="No AI API key configured")
+    _require_ai_configured(provider, api_key, "No AI provider configured")
     _require_provider_extras(provider, cfg)
 
     spec = AI_PROVIDERS[provider]
@@ -561,11 +585,11 @@ def ai_insights(
     provider = cfg.get("provider") or ""
     api_key = cfg.get("api_key") or ""
 
-    if not provider or not api_key:
-        raise HTTPException(
-            status_code=400,
-            detail="AI provider not configured. POST /api/analytics/ai-config first.",
-        )
+    _require_ai_configured(
+        provider,
+        api_key,
+        "AI provider not configured. POST /api/analytics/ai-config first.",
+    )
     _require_provider_extras(provider, cfg)
 
     spec = AI_PROVIDERS[provider]
@@ -652,11 +676,11 @@ def run_ai_action(
     provider = cfg.get("provider") or ""
     api_key = cfg.get("api_key") or ""
 
-    if not provider or not api_key:
-        raise HTTPException(
-            status_code=400,
-            detail="AI provider not configured. Set one in Settings → AI Insights.",
-        )
+    _require_ai_configured(
+        provider,
+        api_key,
+        "AI provider not configured. Set one in Settings → AI Insights.",
+    )
     _require_provider_extras(provider, cfg)
 
     spec = AI_PROVIDERS[provider]
@@ -713,11 +737,21 @@ def ai_query(
     provider = cfg.get("provider") or ""
     api_key = cfg.get("api_key") or ""
 
-    if not provider or not api_key:
+    if provider == CODEX_PROVIDER_KEY:
         raise HTTPException(
             status_code=400,
-            detail="AI provider not configured. POST /api/analytics/ai-config first.",
+            detail=(
+                "OpenAI Codex / ChatGPT currently supports AI Insights and "
+                "predefined analyses. Interactive tool-driven AI Query support "
+                "is not yet implemented."
+            ),
         )
+
+    _require_ai_configured(
+        provider,
+        api_key,
+        "AI provider not configured. POST /api/analytics/ai-config first.",
+    )
     _require_provider_extras(provider, cfg)
 
     spec = AI_PROVIDERS[provider]
