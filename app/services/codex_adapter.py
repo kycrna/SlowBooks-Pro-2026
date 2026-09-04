@@ -29,6 +29,15 @@ CODEX_EXECUTABLE_CANDIDATES = (
     Path("/opt/homebrew/bin/codex"),
     Path("/usr/local/bin/codex"),
 )
+CODEX_PATH_DIRS = (
+    str(Path.home() / ".local" / "bin"),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+)
 
 
 class CodexAdapterError(Exception):
@@ -92,6 +101,16 @@ def _codex_executable() -> str:
     raise CodexUnavailableError()
 
 
+def _codex_env() -> dict[str, str]:
+    env = os.environ.copy()
+    existing_path = env.get("PATH", "")
+    path_parts = [part for part in CODEX_PATH_DIRS if part]
+    if existing_path:
+        path_parts.append(existing_path)
+    env["PATH"] = os.pathsep.join(dict.fromkeys(path_parts))
+    return env
+
+
 def _timeout() -> float:
     raw = os.getenv(CODEX_TIMEOUT_ENV, "").strip()
     if not raw:
@@ -121,6 +140,7 @@ def get_status(runner: Runner = subprocess.run) -> CodexStatus:
             text=True,
             timeout=CODEX_STATUS_TIMEOUT,
             check=False,
+            env=_codex_env(),
         )
     except FileNotFoundError:
         return CodexStatus(
@@ -240,6 +260,7 @@ def run_prompt(
                 text=True,
                 timeout=effective_timeout,
                 check=False,
+                env=_codex_env(),
             )
         except FileNotFoundError as exc:
             raise CodexUnavailableError() from exc

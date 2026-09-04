@@ -51,6 +51,22 @@ def test_status_finds_codex_from_standard_gui_app_path(monkeypatch, tmp_path):
     assert status.authenticated is True
 
 
+def test_status_supplies_codex_subprocess_path(monkeypatch):
+    monkeypatch.setattr(
+        codex_adapter.shutil, "which", lambda _name: "/Users/example/.local/bin/codex"
+    )
+    seen_env = {}
+
+    def runner(args, **kwargs):
+        seen_env.update(kwargs["env"])
+        return _proc(args, stdout="Logged in using ChatGPT\n")
+
+    status = get_status(runner=runner)
+
+    assert status.authenticated is True
+    assert str(codex_adapter.Path.home() / ".local" / "bin") in seen_env["PATH"]
+
+
 def test_status_reports_chatgpt_authenticated(monkeypatch):
     monkeypatch.setattr(
         codex_adapter.shutil, "which", lambda _name: "/usr/local/bin/codex"
