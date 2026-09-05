@@ -3,6 +3,18 @@ set -e
 
 echo "Slowbooks Pro 2026 — Starting up..."
 
+if [ "$(id -u)" = "0" ]; then
+    echo "Preparing writable directories..."
+    mkdir -p /app/app/static/uploads/intake \
+        /app/app/static/uploads/attachments \
+        /app/backups \
+        /home/slowbooks/.codex
+    chown -R slowbooks:slowbooks \
+        /app/app/static/uploads \
+        /app/backups \
+        /home/slowbooks/.codex
+fi
+
 # Wait for PostgreSQL (max 30 seconds)
 echo "Waiting for PostgreSQL..."
 PG_WAIT=0
@@ -18,11 +30,11 @@ echo "PostgreSQL is ready."
 
 # Run migrations
 echo "Running database migrations..."
-alembic upgrade head
+gosu slowbooks alembic upgrade head
 
 # Seed chart of accounts (idempotent — skips if accounts exist)
 echo "Seeding database..."
-python scripts/seed_database.py
+gosu slowbooks python scripts/seed_database.py
 
 # Boot-time wiring self-check. Catches the rare case where the deployed
 # Python image and JS bundle drifted (someone manually swapped files in
@@ -35,9 +47,9 @@ python scripts/seed_database.py
 # most for local dev / debug containers built off requirements-dev.txt.
 #
 # Set SKIP_BOOT_SELFCHECK=1 to bypass even when pytest is available.
-if [ -z "${SKIP_BOOT_SELFCHECK:-}" ] && python -c "import pytest" 2>/dev/null; then
+if [ -z "${SKIP_BOOT_SELFCHECK:-}" ] && gosu slowbooks python -c "import pytest" 2>/dev/null; then
     echo "Boot self-check: SPA <-> backend wiring..."
-    if ! python -m pytest tests/test_wiring.py -q --no-header 2>&1 | tail -5; then
+    if ! gosu slowbooks python -m pytest tests/test_wiring.py -q --no-header 2>&1 | tail -5; then
         echo "ERROR: wiring self-check failed. Set SKIP_BOOT_SELFCHECK=1 to override." >&2
         exit 1
     fi
@@ -47,7 +59,7 @@ echo "Starting Slowbooks Pro 2026 on port ${APP_PORT:-3001}..."
 # Multi-worker production mode.
 # uvloop + httptools come from uvicorn[standard], explicit for clarity.
 # APP_WORKERS defaults to 2 (tunable via docker-compose env or .env).
-exec uvicorn app.main:app \
+exec gosu slowbooks uvicorn app.main:app \
     --host 0.0.0.0 \
     --port "${APP_PORT:-3001}" \
     --workers "${APP_WORKERS:-2}" \

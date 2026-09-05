@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng16-16 \
     libxml2 \
     libxslt1.1 \
+    gosu \
     nodejs \
     npm \
     postgresql-client \
@@ -54,7 +55,6 @@ RUN chmod +x docker-entrypoint.sh
 RUN useradd -m -u 1000 slowbooks \
     && mkdir -p /home/slowbooks/.codex \
     && chown -R slowbooks:slowbooks /app /home/slowbooks/.codex
-USER slowbooks
 
 EXPOSE 3001
 

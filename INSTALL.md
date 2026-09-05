@@ -141,8 +141,8 @@ docker compose exec slowbooks python scripts/seed_irs_mock_data.py
 
 The Docker image includes the Codex CLI for the optional
 **OpenAI Codex / ChatGPT** AI provider. The compose file persists Codex auth in
-the `slowbooks_codex` volume at `/home/slowbooks/.codex`; SlowBooks does not
-store Codex OAuth tokens in its own settings.
+`../data/codex`, mounted at `/home/slowbooks/.codex`; SlowBooks does not store
+Codex OAuth tokens in its own settings.
 
 After the containers are running, sign in once from the host terminal:
 
@@ -157,9 +157,9 @@ ChatGPT login before the provider test succeeds in Settings.
 ### Stopping and restarting
 
 ```bash
-docker compose down          # stop (data persists in volumes)
+docker compose down          # stop (data persists under ../data)
 docker compose up            # restart
-docker compose down -v       # stop AND delete all data
+docker compose down -v       # stop and delete named volumes; bind-mounted ../data persists
 ```
 
 ### Changing the port
@@ -182,11 +182,24 @@ CORS_ALLOW_ORIGINS=https://books.example.com,https://admin.example.com
 
 ### Backups
 
-Backups created from the Settings UI are stored in a Docker volume. To copy them out:
+Runtime data is bind-mounted next to the checkout so server installs keep the
+important state in an ordinary appdata-style folder:
 
-```bash
-docker compose cp slowbooks:/app/backups ./my-backups
 ```
+../data/postgres  PostgreSQL database files
+../data/uploads   uploaded logos, attachments, and receipt intake files
+../data/backups   backups created from the Settings UI
+../data/codex     Codex CLI login state for the OpenAI Codex / ChatGPT provider
+```
+
+With the recommended Unraid layout, those resolve under:
+
+```
+/mnt/user/appdata/slowbooks/data/
+```
+
+Do not delete that `data` directory unless you intentionally want to remove the
+database, uploads, backups, and container-local Codex login.
 
 ---
 
