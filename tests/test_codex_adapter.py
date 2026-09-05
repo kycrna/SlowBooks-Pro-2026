@@ -141,6 +141,7 @@ def test_run_prompt_invokes_codex_exec_and_returns_final_message(monkeypatch):
         "--sandbox",
         "read-only",
     ]
+    assert "--skip-git-repo-check" in calls[1]
     assert "--model" in calls[1]
     assert "gpt-test" in calls[1]
 

@@ -247,6 +247,7 @@ def run_prompt(
             "--json",
             "--sandbox",
             "read-only",
+            "--skip-git-repo-check",
             "--output-last-message",
             tmp_path,
         ]
