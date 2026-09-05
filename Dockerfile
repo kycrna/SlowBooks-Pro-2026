@@ -27,10 +27,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng16-16 \
     libxml2 \
     libxslt1.1 \
+    nodejs \
+    npm \
     postgresql-client \
     tesseract-ocr \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# Codex CLI for the OpenAI Codex / ChatGPT provider. Auth state is persisted
+# outside the image by docker-compose.yml at /home/slowbooks/.codex.
+RUN npm install -g @openai/codex@0.153.1
 
 WORKDIR /app
 
@@ -45,7 +51,9 @@ RUN python -m compileall -q -j 0 /usr/local/lib/python3.13/site-packages /app ||
 
 RUN chmod +x docker-entrypoint.sh
 
-RUN useradd -m -u 1000 slowbooks && chown -R slowbooks:slowbooks /app
+RUN useradd -m -u 1000 slowbooks \
+    && mkdir -p /home/slowbooks/.codex \
+    && chown -R slowbooks:slowbooks /app /home/slowbooks/.codex
 USER slowbooks
 
 EXPOSE 3001

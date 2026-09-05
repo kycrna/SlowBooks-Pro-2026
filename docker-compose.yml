@@ -49,6 +49,7 @@ services:
       APP_PORT: "3001"
       APP_DEBUG: "${APP_DEBUG:-false}"
       APP_WORKERS: "${APP_WORKERS:-2}"
+      CODEX_HOME: "/home/slowbooks/.codex"
       # ---- At-rest encryption (REQUIRED) ----
       # Encrypts employee bank routing/account numbers. Must be forwarded from
       # .env or the app boots with the public dev default and refuses to start
@@ -78,8 +79,10 @@ services:
     volumes:
       - slowbooks_uploads:/app/app/static/uploads
       - slowbooks_backups:/app/backups
+      - slowbooks_codex:/home/slowbooks/.codex
 
 volumes:
   postgres_data:
   slowbooks_uploads:
   slowbooks_backups:
+  slowbooks_codex:

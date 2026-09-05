@@ -137,6 +137,23 @@ To populate the IRS Publication 583 mock data (Henry Brown's Auto Body Shop):
 docker compose exec slowbooks python scripts/seed_irs_mock_data.py
 ```
 
+### OpenAI Codex / ChatGPT provider in Docker
+
+The Docker image includes the Codex CLI for the optional
+**OpenAI Codex / ChatGPT** AI provider. The compose file persists Codex auth in
+the `slowbooks_codex` volume at `/home/slowbooks/.codex`; SlowBooks does not
+store Codex OAuth tokens in its own settings.
+
+After the containers are running, sign in once from the host terminal:
+
+```bash
+docker compose exec slowbooks codex login --device-auth
+docker compose exec slowbooks codex login status
+```
+
+Complete the browser/device-code login flow. The status command should report a
+ChatGPT login before the provider test succeeds in Settings.
+
 ### Stopping and restarting
 
 ```bash
